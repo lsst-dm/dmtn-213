@@ -32,8 +32,8 @@ In particular, the Datastore is typically expected to be an object store but mig
 
 We are expecting to use Rucio to transfer data (raw, some intermediate, and published data products) from location to location.
 
-We are writing a component that monitors Rucio to determine when a replica of a dataset has been created and automatically ingests that dataset into a local Butler.
-Note that for this replica monitor to work, there must be sufficient metadata information either within the replicated file or replicated alongside to allow Butler ingest.
+We are writing a Replica Monitor service that monitors Rucio to determine when a replica of a dataset has been created and automatically ingests that dataset into a local Butler.
+Note that for this Replica Monitor to work, there must be sufficient metadata information either within the replicated file, replicated alongside, or perhaps registered as Rucio file metadata to allow Butler ingest.
 This metadata includes the Butler dataset type, dataId dimension values, and collection name.
 It also includes any provenance metadata pertaining to the dataset.
 
@@ -88,7 +88,7 @@ The dataset type list is composed of all published data products as well as any 
 The merge step does not communicate with the source Butler at the USDF.
 
 As datasets are registered in Rucio, Rucio takes charge of replicating them to appropriate destinations (all Data Facilities for globally distributed datasets and the USDF for globally summarized datasets).
-The replica monitor then ingests the results into local Butlers at each site, making them available for use by following workflows and jobs.
+The Replica Monitor then ingests the results into local Butlers at each site, making them available for use by following workflows and jobs.
 In particular, it ingests them into the source Butler at the USDF for future QG generation.
 This means that workflows that require the outputs of a preceding workflow must wait until Rucio has replicated all of the replicable products to the USDF before beginning QG generation.
 This latency is not expected to be high (but should be measured), and given the amount of processing to be done can usually be filled with other workflows that need to be executed.
@@ -111,7 +111,7 @@ Site-local QG generation
 Since the site-local Butler Registry and Datastore have all needed information about locally-present datasets, they could be used to generate QGs for workflows submitted to the site.
 Since the URIs in its Datastore are already site-local, no translation step would be needed.
 
-Essentially this would be using Campaign Management to do single-site workflow execution at each site independently, although Rucio, Rucio registration in the merge job, and the replica monitor are still necessary to replicate outputs.
+Essentially this would be using Campaign Management to do single-site workflow execution at each site independently, although Rucio, Rucio registration in the merge job, and the Replica Monitor are still necessary to replicate outputs.
 
 One complication with this model is determining how workflow submission to PanDA (or the underlying site batch system) would be done.
 If a global PanDA submission is desired to allow centralized tracking of all workflows, then the QG and EB (or at least their locations) would seem to need to be transferred back to the USDF for inclusion in that submission.
