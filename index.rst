@@ -75,10 +75,16 @@ If the use of such temporaries can be internalized within a given job (which mig
 
 Another alternative might be to register all temporaries in Rucio without replication, but this could significantly impact Rucio scalability.
 
+.. figure:: /_static/Multi-Site-BPS.png
+    :name: fig-multi-site-bps
+
+    Multi-Site Processing with BPS.
+
 For the single-site workflow, we can continue to have the pipeline YAML file, source Butler, and configuration parameters be provided to BPS.
 The source Butler is located at the USDF.
 As the EB is created, it needs to contain URIs local to the site where the workflow will be executed.
 There are two possible ways to do this: either the source Butler can contain "Rucio URIs" that are site-independent and the EB creation can use Rucio APIs to translate these into site-specific URIs, or the source Butler can contain USDF-local Datastore URIs and the EB creation can know how to translate these into the site-specific URIs.
+The latter is undesirable, as it requires detailed knowledge of the specifics of the USDF storage.
 
 The resulting EB and job descriptions (including the final merge job) are handed to PanDA as is currently done for single-site execution, but in this case the site may be remote from the USDF.
 As jobs execute, they produce result datasets in the local Datastore of the site.
