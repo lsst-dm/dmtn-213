@@ -55,6 +55,10 @@ Depending on the type of URI (shared filesystem or object store), these datasets
 
 After execution of all the jobs in the workflow, the EB is merged into the source Butler, making the results available and preserving provenance.
 
+.. figure:: /_static/Single-Site-BPS.png
+    :name: fig-single-site-bps
+
+    Single Site Processing with BPS.
 
 Extension to Multi-Site Processing
 ==================================
