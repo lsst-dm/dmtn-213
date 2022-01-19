@@ -21,7 +21,9 @@ The USDF and FrDF will host 100% of the raw images and the published data produc
 It is expected that the UKDF will only host 25% of the raw images.
 It may host a larger fraction of the published data products, but we should not rely on 100% of those products being present at the UKDF.
 The files or objects composing these raw and published data products, along with temporary data products, are referred to here as "datasets", corresponding with LSST Data Butler terminology.
-Note that this conflicts with standard Rucio terminology, in which a "dataset" is a collection of files.
+Each Butler dataset is typically composed of a single file that constitutes a usable scientific entity.
+In some cases, however, complex datasets with multiple components may be persisted as more than one file.
+Note that this somewhat conflicts with standard Rucio terminology, in which a "dataset" is a collection of files.
 
 All sites will run the same Science Pipelines code, including middleware, using specifically-versioned binary artifacts retrieved from CVMFS.
 All sites will have a local Data Butler repository with Registry and Datastore using a PostgreSQL database.
