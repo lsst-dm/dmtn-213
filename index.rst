@@ -79,18 +79,40 @@ If the use of such temporaries can be internalized within a given job (which mig
 
 Another alternative might be to register all temporaries in Rucio without replication, but this could significantly impact Rucio scalability.
 
-.. figure:: /_static/Multi-Site-BPS.png
-    :name: fig-multi-site-bps
-
-    Multi-Site Processing with BPS.
-
 For the single-site workflow, we can continue to have the pipeline YAML file, source Butler, and configuration parameters be provided to BPS.
 The source Butler is located at the USDF.
 As the EB is created, it needs to contain URIs local to the site where the workflow will be executed.
+
+To extend this to multi-DF processing, we can either start the processing by generating Quantum graph at USDF (and ship
+it to other DFs) or start by generating Quantum graph at the DF that will do the actual data processing. 
+
+Generating Quantum Graph Centrally at the USDF
+----------------------------------------------
+
+The following figure shows that a Quantum graph is generated at the source Butler (aka USDF Butler), ship to other DF to start the data processing.
+
+.. figure:: /_static/Multi-Site-BPS.png
+    :name: fig-multi-site-bps
+
+    Multi-Site Processing with BPS, Quantum graph is created at USDF.
+
 There are two possible ways to do this: either the source Butler can contain "Rucio URIs" that are site-independent and the EB creation can use Rucio APIs to translate these into site-specific URIs, or the source Butler can contain USDF-local Datastore URIs and the EB creation can know how to translate these into the site-specific URIs.
 The latter is undesirable, as it requires detailed knowledge of the specifics of the USDF storage.
 
-The resulting EB and job descriptions (including the final merge job) are handed to PanDA as is currently done for single-site execution, but in this case the site may be remote from the USDF.
+Generating Quantum Graph at the Data Processing DF
+--------------------------------------------------
+
+The following figure shows that a Quantum graph is generated at the DF that will process the corresponding data, using
+the DF's Bulter. In this scenario, we will likely use a Panda job to run the first step of creating Quantum graph.
+
+
+.. figure:: /_static/Multi-Site-BPS2.png
+    :name: fig-multi-site-bps2
+
+    Multi-Site Processing with BPS, Quantum Graph is created at the Data Processing DF.
+
+Regardless of where the Quantum graphs are created, 
+the resulting EB and job descriptions (including the final merge job) are handed to PanDA as is currently done for single-site execution, but in this case the site may be remote from the USDF.
 As jobs execute, they produce result datasets in the local Datastore of the site.
 When the EB merge job runs, it merges into the local Butler at the site as usual, but it also has an additional step that registers datasets of particular dataset types with Rucio.
 (It may be possible to only do the Rucio registration and leave the Butler ingest to the automated Rucio monitor, but this is likely to be less efficient than having the monitor only process true replicas rather than initial ingests.)
