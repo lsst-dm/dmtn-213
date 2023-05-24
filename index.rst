@@ -85,6 +85,7 @@ Since these would be temporary, relatively large, and relatively numerous, they 
 Campaign Management could execute a modified BPS at the USDF, relying on it to generate QGs and workflows for remote sites, but it will be simpler and faster to execute BPS remotely at the local sites, as this requires no changes to the BPS code.
 The pipeline YAML file and configuration parameters will be passed to BPS, which will generate the QG and the workflow jobs based on the site-local Butler Registry and Datastore, which have all needed information about locally-present datasets.
 The QG will be stored locally as well as replicated via Rucio to the USDF as a provenance data product.
+The simplest way to execute BPS remotely is to submit it as a PanDA job (which in turn submits more PanDA jobs based on the QG).
 
 Note that workflow submissions will use the PanDA BPS plugin and will submit jobs to local site queues but via the central USDF PanDA service.
 This will ensure that all jobs can be observed and tracked in one place.
