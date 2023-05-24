@@ -94,6 +94,9 @@ This will ensure that all jobs can be observed and tracked in one place.
     :name: fig-multi-site-local-bps
 
     Multi-Site Processing with Local BPS.
+    Blue items are added to the single-site processing diagram.
+    Items in the dotted boxes execute locally at processing sites.
+    Other items are centrally located at the USDF.
 
 After the workflow is complete, the merge job merges the EB/QG into the local Butler at the site as usual, but code will be added that registers datasets of particular dataset types with Rucio.
 The dataset type list is composed of all published data products as well as any temporary data products that need to be globally distributed or globally summarized.
