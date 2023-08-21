@@ -13,13 +13,14 @@ Background
 ==========
 
 The Data Release Production needs to run at multiple sites.
-50% of the processing will be performed at the French Data Facility (FrDF) at CC-IN2P3.
+40% of the processing will be performed at the French Data Facility (FrDF) at CC-IN2P3.
 25% of the processing will be performed at the UK Data Facility (UKDF), which may actually make use of resources at multiple physical locations in the UK.
-25% of the processing, as well as the central control, will be hosted at the US Data Facility.
+35% of the processing, as well as the central control, will be hosted at the US Data Facility.
 
-The USDF and FrDF will host 100% of the raw images and the published data products.
+The USDF and FrDF will host 100% of the raw images.
+The USDF will host 100% of the published data products.
 It is expected that the UKDF will only host 25% of the raw images.
-It may host a larger fraction of the published data products, but we should not rely on 100% of those products being present at the UKDF.
+The FrDF and UKDF will host some fraction of the published data products, but we should not rely on 100% of those products being present at either site.
 The files or objects composing these raw and published data products, along with temporary data products, are referred to here as "datasets", corresponding with LSST Data Butler terminology.
 Each Butler dataset is typically composed of a single file that constitutes a usable scientific entity.
 In some cases, however, complex datasets with multiple components may be persisted as more than one file.
@@ -38,6 +39,7 @@ This metadata includes the Butler dataset type, dataId dimension values, and col
 It also includes any provenance metadata pertaining to the dataset.
 
 We are expecting to use the Batch Production Service (BPS) software in conjunction with PanDA to define and control the execution of processing workflows at each Data Facility.
+See below for more details on how this will function.
 
 We are expecting to use a custom Campaign Management system to control the overall submission of workflows to Data Facilities and the sequencing of those workflows as part of the Data Release Production.
 
@@ -50,10 +52,15 @@ BPS accesses the source Butler to create a Quantum Graph (QG) describing the wor
 
 An Execution Butler (EB) is generated from the Quantum Graph.
 This is materialized as a SQLite database that is provided to each job in the workflow; it holds all the relevant Butler Registry and Datastore information for the workflow, obviating the need to contact the source Butler for each job.
+
+BPS generates jobs from the QG and submits them (using a plugin framework) to one of several available workflow systems.
 Each job retrieves datasets from or persists datasets to the underlying Datastore using pre-computed URIs in the EB.
 Depending on the type of URI (shared filesystem or object store), these datasets may be copied and cached locally on the worker node executing the job.
 
 After execution of all the jobs in the workflow, the EB is merged into the source Butler, making the results available and preserving provenance.
+
+In the near future (by the end of June 2023), the EB will go away, as the contents of its database will be part of the QG.
+This removes a generation step, but it does not change the need for a merge job.
 
 .. figure:: /_static/Single-Site-BPS.png
     :name: fig-single-site-bps
@@ -75,66 +82,68 @@ It is acknowledged that PanDA is typically used in a data-driven mode in which m
 We are not using this mode because the Data Release Production is likely to use extensive temporary files derived from the Processed Visit Images (PVIs) that are shared between multiple coadd jobs within the same patch.
 Since these would be temporary, relatively large, and relatively numerous, they should not be replicated across sites nor regenerated for each coadd patch job.
 
-If the use of such temporaries can be internalized within a given job (which might, for example, work on all PVIs overlapping a patch at once rather than processing PVIs and patches separately), then it may be possible to loosen the single-site workflow constraint.
+Campaign Management could execute a modified BPS at the USDF, relying on it to generate QGs and workflows for remote sites, but it will be simpler and faster to execute BPS remotely at the local sites, as this requires no changes to the BPS code.
+The pipeline YAML file and configuration parameters will be passed to BPS, which will generate the QG and the workflow jobs based on the site-local Butler Registry and Datastore, which have all needed information about locally-present datasets.
+The QG will be stored locally as well as replicated via Rucio to the USDF as a provenance data product.
+The simplest way to execute BPS remotely is to submit it as a PanDA job (which in turn submits more PanDA jobs based on the QG).
 
-Another alternative might be to register all temporaries in Rucio without replication, but this could significantly impact Rucio scalability.
+Note that workflow submissions will use the PanDA BPS plugin and will submit jobs to local site queues but via the central USDF PanDA service.
+This will ensure that all jobs can be observed and tracked in one place.
 
-.. figure:: /_static/Multi-Site-BPS.png
-    :name: fig-multi-site-bps
+.. figure:: /_static/Multi-Site-Local-BPS.png
+    :name: fig-multi-site-local-bps
 
-    Multi-Site Processing with BPS.
+    Multi-Site Processing with Local BPS.
+    Blue items are added to the single-site processing diagram.
+    Items in the dotted boxes execute locally at processing sites.
+    Other items are centrally located at the USDF.
 
-For the single-site workflow, we can continue to have the pipeline YAML file, source Butler, and configuration parameters be provided to BPS.
-The source Butler is located at the USDF.
-As the EB is created, it needs to contain URIs local to the site where the workflow will be executed.
-There are two possible ways to do this: either the source Butler can contain "Rucio URIs" that are site-independent and the EB creation can use Rucio APIs to translate these into site-specific URIs, or the source Butler can contain USDF-local Datastore URIs and the EB creation can know how to translate these into the site-specific URIs.
-The latter is undesirable, as it requires detailed knowledge of the specifics of the USDF storage.
-
-The resulting EB and job descriptions (including the final merge job) are handed to PanDA as is currently done for single-site execution, but in this case the site may be remote from the USDF.
-As jobs execute, they produce result datasets in the local Datastore of the site.
-When the EB merge job runs, it merges into the local Butler at the site as usual, but it also has an additional step that registers datasets of particular dataset types with Rucio.
-(It may be possible to only do the Rucio registration and leave the Butler ingest to the automated Rucio monitor, but this is likely to be less efficient than having the monitor only process true replicas rather than initial ingests.)
+After the workflow is complete, the merge job merges the EB/QG into the local Butler at the site as usual, but code will be added that registers datasets of particular dataset types with Rucio.
 The dataset type list is composed of all published data products as well as any temporary data products that need to be globally distributed or globally summarized.
-The merge step does not communicate with the source Butler at the USDF.
-
-As datasets are registered in Rucio, Rucio takes charge of replicating them to appropriate destinations (all Data Facilities for globally distributed datasets and the USDF for globally summarized datasets).
+This allows Rucio to replicate these outputs to the USDF and to any other location where they may be needed.
+The subscriptions needed to automate this replication are expected to use metadata items such as the dataset type and information from the data id, provided to Rucio at registration time, to make decisions as to proper destinations (including all Data Facilities for globally distributed datasets and the USDF for globally summarized datasets).
+These are mostly expected to be campaign-agnostic, although it may be prudent to allow per-campaign customization.
 The Replica Monitor then ingests the results into local Butlers at each site, making them available for use by following workflows and jobs.
-In particular, it ingests them into the source Butler at the USDF for future QG generation.
-This means that workflows that require the outputs of a preceding workflow must wait until Rucio has replicated all of the replicable products to the USDF before beginning QG generation.
-This latency is not expected to be high (but should be measured), and given the amount of processing to be done can usually be filled with other workflows that need to be executed.
-However there is a use case (executing a workflow based on failed jobs in a previous workflow) where such latency may be undesirable.
+
+Essentially this is using Campaign Management to do single-site workflow execution at each site independently, with Rucio replication of results.
+
+A QG generation job at a local site should not be executed until all of its inputs are present.
+Since a local site cannot be certain of all the inputs that it should be receiving, it will be necessary to have an external synchronization to permit QG generation to take place.
+This is provided by the "step" structure of the Data Release Production.
+Each step produces one or more independent QGs that depend on outputs from prior steps but not the current step.
+As a result, if we wait for Rucio to be quiescent (no transfers remaining) after the execution of each step, we can then be assured that all inputs for the next step are available where they are needed.
+Re-execution of failed jobs or other recovery workflows will be site-local and so are assured that Rucio replication will not cause delays.
+
+In this multi-site execution design, the BPS submission definition YAML will have to be customized for each local site, at a minimum specifying the compute site.
+But most Butler and Pipeline settings should be site-independent.
+
+BPS maintains state in the local filesystem for its preparation, submission, reporting, cancellation, and restart functionality.
+While the central PanDA service allows an overall view of all jobs executing at any site, tools will probably need to be developed to remotely call BPS to report on its view of the state of each workflow and to control that workflow.
+
+
+Current Status
+==============
+
+BPS
+---
+
+A Rucio-registering merge job has not yet been written, but the code to do so has been demonstrated and integrated into the auto-ingest system for LSSTCam testing at SLAC.
+
+Replica Monitor
+---------------
+
+Code has been written for this service to transform Rucio replica messages into Kafka messages with site-specific topics.
+Sites are setting up Kafka and MirrorMaker to enable those topics to be transferred.
+We plan to deploy the auto-ingest framework to ingest into the Butler upon receipt of the Kafka message, although it is possible that something simpler may work well enough in this non-realtime use case.
+
+Campaign Management
+-------------------
+
+This document will continue to be refined to provide sufficient information to Campaign Management to design the scripts and UIs needed to execute multi-site processing.
 
 
 Future Improvements
 ===================
-
-Distributed Rucio Query
------------------------
-
-If the translation step in the EB generation is a bottleneck due to having it being done serially in a single job, distributing this to the workers by having the EB be in terms of "Rucio URIs" might seem to be a possibility.
-However those workers still need to contact the central Rucio servers at the USDF over transatlantic links, so it seems difficult for this to be more efficient.
-In addition, Rucio provides a batched ``/replicas/list`` interface that seems likely to make EB generation sufficiently efficient.
-
-Site-local QG generation
-------------------------
-
-Since the site-local Butler Registry and Datastore have all needed information about locally-present datasets, they could be used to generate QGs for workflows submitted to the site.
-Since the URIs in its Datastore are already site-local, no translation step would be needed.
-
-Essentially this would be using Campaign Management to do single-site workflow execution at each site independently, although Rucio, Rucio registration in the merge job, and the Replica Monitor are still necessary to replicate outputs.
-
-One complication with this model is determining how workflow submission to PanDA (or the underlying site batch system) would be done.
-If a global PanDA submission is desired to allow centralized tracking of all workflows, then the QG and EB (or at least their locations) would seem to need to be transferred back to the USDF for inclusion in that submission.
-If a direct submission to the local batch system is performed, as BPS might normally do, then a global view of the workflow execution is difficult to maintain.
-
-Redis-based QG + EB
--------------------
-
-Today the QG and EB are materialized as files.
-For efficiency, it has been proposed to use a Redis database as the persisted (and unified) form of these concepts.
-Obviously this requires a Redis server at each site.
-But QG generation directly to a remote Redis server seems undesirable, so this implementation might best be paired with site-local QG generation as described above.
-Otherwise, the (unified) QG and EB could be transferred as a file (likely via a non-Rucio mechanism) and then loaded into the remote Redis.
 
 PanDA staging
 -------------
@@ -142,11 +151,8 @@ PanDA staging
 Today PanDA jobs are not provided with information about the local URIs of the datasets that are to be processed.
 This information is contained only in the QG and EB.
 But it would be possible to extract that information and provide it to PanDA, enabling it to stage the data from site-local storage to the worker node executing the job rather than having the Butler pull it from site-local storage.
-At this level, this is not really related to the multi-site problem.
+At this level, this is not really related to the multi-site problem, and it's not clear that there is a significant efficiency advantage to pushing the data rather than pulling it.
 
-Given a "Rucio URI"-based source Butler at the USDF, it could also be possible to provide those "Rucio URIs" (DIDs) to PanDA for each job, in which case PanDA could schedule jobs where the data is present in addition to staging.
-This seems closer to typical High Energy Physics (HEP) usage.
-This has the potential of running afoul of the shared-temporary issue mentioned previously, however.
 
 .. .. rubric:: References
 
