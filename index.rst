@@ -24,7 +24,7 @@ The FrDF and UKDF will host some fraction of the published data products, but we
 The files or objects composing these raw and published data products, along with temporary data products, are referred to here as "datasets", corresponding with LSST Data Butler terminology.
 Each Butler dataset is typically composed of a single file that constitutes a usable scientific entity.
 In some cases, however, complex datasets with multiple components may be persisted as more than one file.
-Note that this somewhat conflicts with standard Rucio terminology, in which a "dataset" is a collection of files.
+Note that this somewhat conflicts with standard Rucio terminology, in which a "Dataset" is a collection of files.
 
 All sites will run the same Science Pipelines code, including middleware, using specifically-versioned binary artifacts retrieved from CVMFS.
 All sites will have a local Data Butler repository with Registry and Datastore using a PostgreSQL database.
@@ -119,6 +119,94 @@ But most Butler and Pipeline settings should be site-independent.
 
 BPS maintains state in the local filesystem for its preparation, submission, reporting, cancellation, and restart functionality.
 While the central PanDA service allows an overall view of all jobs executing at any site, tools will probably need to be developed to remotely call BPS to report on its view of the state of each workflow and to control that workflow.
+
+
+Organization and Naming of Rucio Concepts
+=========================================
+
+Capital letters are used to distinguish Rucio concepts from Butler concepts, as their terminology overlaps.
+
+Rucio stores Files identified by DIDs.
+Each file is in a single Scope, but it can be attached to multiple Datasets that group together files that are handled similarly.
+Containers can be used to group Datasets together.
+
+
+Scopes
+------
+
+Scopes are useful for constraining access permissions and may be useful for controlling backups and removing unneeded or obsolete data en masse.
+There is no significant limit on the number of Scopes, nor on the number of DIDs per Scope.
+
+raw
+^^^
+
+Represents raw archival observation data from any instrument, whether on-sky, calibration, engineering, or on a test stand.
+Includes precursor on-sky data, if desired.
+In any case, includes data from multiple instruments, such as the three Rubin Observatory ones.
+Manipulations of this Scope need to be highly restricted.
+
+simulation
+^^^^^^^^^^
+Manipulations of this Scope are less restricted than for raw data.
+
+Campaign Scope
+^^^^^^^^^^^^^^
+Each campaign (e.g. DP1, DP2, DR1, DR2, etc. or preparatory campaigns) can have its own Scope for data products.
+Manipulations of this Scope are inherently multi-site and open to a wider group.
+
+
+Containers
+----------
+
+raw and simulation Scopes
+^^^^^^^^^^^^^^^^^^^^^^^^^
+Not expected to be used.
+
+Campaign Scope
+^^^^^^^^^^^^^^
+Each step will have all of its outputs collected into a single Container for ease of archiving to a Tape RSE.
+The name will be of the form ``Container/{campaign}/{step}``.
+These Containers can be closed when the step is complete.
+
+Datasets
+--------
+
+raw and simulation Scope
+^^^^^^^^^^^^^^^^^^^^^^^^
+HSC precursor data is named as ``Dataset/HSC/raw/TractNNNNN``, as there are not too many files per tract.
+
+LSST data will be named as ``Dataset/LSSTCam/raw/TractNNNNN``.
+We expect to have on average 120000 files per tract, more in deep drilling fields.
+If necessary, to keep Dataset sizes small, a ``/YYYY`` field could be appended to the Dataset name.
+These Datasets can be monotonic.
+These can be closed when the given year is complete, including any catch-up archiving.
+
+Campaign Scope
+^^^^^^^^^^^^^^
+Data product Datasets will be named as ``Dataset/{collection}/{dataset type}`` where the collection name typically contains the campaign name, the processing location, the instrument name, the step number, the group number, and the execution(TBR) number.
+If the dataset type is spatially distributed, a ``/TractNNNNN`` field will be appended to the Dataset name.
+
+Each dataset type falls into one of four categories:
+- Local temporary, not registered in Rucio
+- Needed only for central, global processing or non-spatial global outputs, registered in ``Dataset/{collection}/{dataset type}``
+- Tract-based, tract extracted from data id
+- Non-tract-based (e.g. exposure- or visit-based), tract determined from Butler overlap
+
+This organization keeps the number of files per Dataset small, but it leads to a large number of Datasets per Scope.
+But keeping the Datasets organized similarly to the Campaign Management collections will make tracking and maintenance easier.
+
+The goal is to allow generic tract-based rules for most distribution, while making campaign/step/group-specific overrides possible.
+
+Files
+-----
+
+All Files stored in Rucio are given physical pathnames on the local filesystem or object store by systems external to Rucio, including CCS data transfer and the Data Butler.
+This is unusual for Rucio, which typically controls the placement of any files it knows about.
+
+Rucio storage elements (RSE) can be either deterministic, in which the physical name of a File can be determined algorithmically from the logical name of the File in the DID, or non-deterministic, in which a lookup is needed.
+For compactness of the database, deterministic RSEs are desirable.
+Accordingly, we need to ensure that the logical filenames used when registering in Rucio match those given by the external systems, and we need to provide an algorithm that does a minimal mapping (generally prefix-only) from the logical filename to the physical filename.
+
 
 
 Current Status
