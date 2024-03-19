@@ -129,7 +129,24 @@ Capital letters are used to distinguish Rucio concepts from Butler concepts, as 
 Rucio stores Files identified by DIDs.
 Each file is in a single Scope, but it can be attached to multiple Datasets that group together files that are handled similarly.
 Containers can be used to group Datasets together.
+Rucio Storage Elements (RSEs) identify site-specific storage for files.
 
+RSEs
+----
+
+We will have (at least) two RSEs at each site: one for raw data and one for data products stored in Butler repos.
+These will be named ``{SITE}_RAW_DISK`` and ``{SITE}_BUTLER_DISK``, respectively.
+
+We will also have metadata tags for each RSE so that we're not tied directly to the RSE names.
+These will be ``{instrument}_{site}`` for raw data (e.g. ``hsc_uk``) and ``butler_{site}`` for data products.
+
+RSEs can be deterministic, in which the physical filename is algorithmically determined from the logical filename, or non-deterministic, in which the two are mapped via a lookup table.
+We will allow the use of either deterministic or non-deterministic RSEs in all cases, with deterministic preferred in order to minimize the size of the Rucio database.
+
+The deterministic RSE algorithm for raw and simulated data can be ``identity``, which includes the Scope (see next subsection) in the physical filename, or ``lsst_butler``, which does not, at a site's option.
+Raw and simulated data will be distinguished by instrument, even if Scope is not used.
+
+The deterministic RSE algorithm for Butler data products will be ``identity`` so that the Scope is included.
 
 Scopes
 ------
@@ -139,11 +156,12 @@ There is no significant limit on the number of Scopes, nor on the number of DIDs
 
 raw
 ^^^
-
 Represents raw archival observation data from any instrument, whether on-sky, calibration, engineering, or on a test stand.
 Includes precursor on-sky data, if desired.
 In any case, includes data from multiple instruments, such as the three Rubin Observatory ones.
 Manipulations of this Scope need to be highly restricted.
+
+Raw data can be stored in a different location from Butler data products for safety, and it will typically be ingested into Butler repos via the ``direct`` method.
 
 simulation
 ^^^^^^^^^^
@@ -151,9 +169,15 @@ Manipulations of this Scope are less restricted than for raw data.
 
 Campaign Scope
 ^^^^^^^^^^^^^^
-Each campaign (e.g. DP1, DP2, DR1, DR2, etc. or preparatory campaigns) can have its own Scope for data products.
-Manipulations of this Scope are inherently multi-site and open to a wider group.
+The Scopes for campaigns will follow Butler repo naming: each repo will be a Scope.
+This means that it will not be possible to use ``/repo/main`` at the USDF and a different repo name at the UKDF and FrDF.
 
+Each campaign (e.g. DP1, DP2, DR1, DR2, etc. or preparatory campaigns) can have its own Butler repo and therefore Scope for data products.
+But repos can also be shared across multiple campaigns if desired.
+
+Manipulations of campaign Scopes are inherently multi-site and open to a wider group.
+
+All Butler repos used for multi-site operations will be expected to be physically available under a single root path (via the use of symlinks if necessary on POSIX filesystems).
 
 Containers
 ----------
@@ -173,17 +197,16 @@ Datasets
 
 raw and simulation Scope
 ^^^^^^^^^^^^^^^^^^^^^^^^
-HSC precursor data is named as ``Dataset/HSC/raw/TractNNNNN``, as there are not too many files per tract.
-
-LSST data will be named as ``Dataset/LSSTCam/raw/TractNNNNN``.
-We expect to have on average 120000 files per tract, more in deep drilling fields.
-If necessary, to keep Dataset sizes small, a ``/YYYY`` field could be appended to the Dataset name.
+Datasets are named as ``Dataset/{instrument}/raw/TractNNNNN``, as there are not too many files per tract.
+For LSSTCam, we expect to have on average 120000 files per tract, more in deep drilling fields.
+If necessary, to keep Dataset sizes small, a ``/YYYY`` year field could be appended to the Dataset name.
 These Datasets can be monotonic.
 These can be closed when the given year is complete, including any catch-up archiving.
 
 Campaign Scope
 ^^^^^^^^^^^^^^
 Data product Datasets will be named as ``Dataset/{collection}/{dataset type}`` where the collection name typically contains the campaign name, the processing location, the instrument name, the step number, the group number, and the execution(TBR) number.
+The repo name (which may be redundant with the campaign name) will be in the Scope.
 If the dataset type is spatially distributed, a ``/TractNNNNN`` field will be appended to the Dataset name.
 
 Each dataset type falls into one of four categories:
@@ -203,10 +226,8 @@ Files
 All Files stored in Rucio are given physical pathnames on the local filesystem or object store by systems external to Rucio, including CCS data transfer and the Data Butler.
 This is unusual for Rucio, which typically controls the placement of any files it knows about.
 
-Rucio storage elements (RSE) can be either deterministic, in which the physical name of a File can be determined algorithmically from the logical name of the File in the DID, or non-deterministic, in which a lookup is needed.
-For compactness of the database, deterministic RSEs are desirable.
-Accordingly, we need to ensure that the logical filenames used when registering in Rucio match those given by the external systems, and we need to provide an algorithm that does a minimal mapping (generally prefix-only) from the logical filename to the physical filename.
-
+Because we permit deterministic RSEs, physical filenames are determined by the RSE scheme, hostname, port, and prefix, usually followed by the scope (depending on the configured deterministic algorithm) and the logical filename.
+These physical filenames must match where the Butler repos are configured to place files.
 
 
 Current Status
